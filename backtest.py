@@ -69,15 +69,17 @@ def fetch_klines(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
     timeout = max(5, integer("HTTP_TIMEOUT_SECONDS", 20))
     pause = max(0.0, number("REQUEST_PAUSE_SECONDS", 0.15))
     rows: dict[int, dict] = {}
-    cursor = start_ms
+    # Bybit returns klines newest-first. Page backwards from the requested end
+    # so windows longer than 1,000 candles do not silently omit older data.
+    cursor_end = end_ms
 
-    while cursor <= end_ms:
+    while cursor_end >= start_ms:
         query = urlencode({
             "category": category,
             "symbol": symbol.upper(),
             "interval": interval,
-            "start": cursor,
-            "end": end_ms,
+            "start": start_ms,
+            "end": cursor_end,
             "limit": limit,
         })
         url = f"{base}/v5/market/kline?{query}"
@@ -106,11 +108,13 @@ def fetch_klines(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
                     "close": float(item[4]),
                     "volume": float(item[5]),
                 }
-        newest = max(timestamps)
-        next_cursor = newest + integer("TIMEFRAME_MINUTES", 15) * 60_000
-        if next_cursor <= cursor or newest >= end_ms or len(batch) < limit:
+        oldest = min(timestamps)
+        if oldest <= start_ms or len(batch) < limit:
             break
-        cursor = next_cursor
+        next_cursor_end = oldest - 1
+        if next_cursor_end >= cursor_end:
+            raise RuntimeError(f"Bybit pagination did not advance for {symbol}")
+        cursor_end = next_cursor_end
         if pause:
             time.sleep(pause)
 
