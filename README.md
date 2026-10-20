@@ -1,33 +1,53 @@
-# RSI Research Project
+# RSI Historical Research
 
-A separate repository for researching RSI(20) signals on 15-minute Bybit futures candles. This repository is independent of EMA-BAND.
+A separate historical-research project for RSI(20) signals on completed 15-minute Bybit linear candles. This repository is independent of EMA-BAND.
 
-## Security first
+## What is implemented
 
-**Never put API keys, API secrets, Telegram bot tokens, chat IDs, VPS private keys, .env files, or other credentials in this repository.** The repository is public. Anyone can read committed secrets, and deleting a file later does not remove it from Git history.
+- Downloads public historical candles from the Bybit V5 market-data endpoint (no authentication required).
+- Uses a configurable RSI period and thresholds.
+- Uses the signal candle close to decide, then simulates a fill at the **next candle open** to reduce look-ahead bias.
+- Applies configurable per-side fee and slippage assumptions to hypothetical fill prices.
+- Writes a per-trade CSV and JSON summary under the configured output directory.
+- Includes unit tests for the RSI calculation.
 
-Store secrets only in a private VPS environment file (for example, /etc/rsi-bot/rsi.env) with restrictive permissions. Do not paste secrets into chat or commit them to GitHub. If any credential has already been exposed publicly, revoke/rotate it immediately.
+It is a historical analysis script only: it does not connect to private endpoints, submit orders, manage positions, or require Bybit/Telegram credentials.
 
-## Research rules to document
+## Strategy definitions
 
-- Timeframe: 15-minute candles.
-- Indicator: RSI(20), calculated from completed candles for reproducible research.
-- Long signal concept: RSI crosses down through 40.
-- Long exit concept: RSI crosses up through 70.
-- Short signal concept: RSI crosses up through 85.
-- Short exit concept: RSI crosses down through 30.
-- Market universe: maintain a separately configured list of symbols; validate instrument status and candle completeness before analysis.
-- Initial mode: historical research / paper-only. No live order execution is included here.
-- EMA-BAND must remain untouched.
+- Long entry: RSI crosses from at/above 40 to below 40.
+- Long exit: RSI crosses from at/below 70 to above 70.
+- Short entry: RSI crosses from at/below 85 to above 85.
+- Short exit: RSI crosses from at/above 30 to below 30.
 
-## Credentials
+Signals are based on completed candles. If an entry/exit signal appears at candle i close, the simulated fill uses candle i+1 open. Only one hypothetical position per symbol is tracked; opposite entry signals are ignored while a position is open. Any still-open position at the end is excluded from completed-trade metrics.
 
-Use .env.example as a list of variable names only. Copy it to a private VPS-only environment file and fill in credentials there. Never commit the filled file.
+## Quick start
 
-## Research cautions
+1. Copy `.env.example` to `.env` and edit the settings. Never commit `.env`.
+2. Review `BYBIT_CATEGORY`, `SYMBOLS`, date range, RSI thresholds, fees, slippage and assumed research notional.
+3. Run the tests:
 
-Historical results are not predictions. Any candle study should account for candle-close timing, fees, slippage, funding, instrument contract rules, missing data, and look-ahead bias. Liquidation-price estimates depend on exchange margin rules and account state; a fixed percentage rule cannot guarantee a stop executes before liquidation.
+   ```sh
+   python3 -m unittest -v test_backtest.py
+   ```
 
-## Status
+4. Run the historical study:
 
-This repository contains safe project scaffolding and configuration guidance. It does not currently contain a live trading engine, does not submit orders, and does not claim a verified backtest result.
+   ```sh
+   python3 backtest.py
+   ```
+
+No third-party Python packages are required. Public Bybit market-data access and an internet connection are required to fetch candles. Use a conservative date window first; the script may warn about missing intervals or insufficient data.
+
+## Configuration
+
+All backtest settings are in `.env.example`: public API base URL, market-data documentation link, contract category, timeframe, RSI period/thresholds, date window, candle minimum, symbols, assumed notional, per-side fee and slippage, HTTP timeout, request pause, and output directory.
+
+The `BYBIT_API_KEY`, `BYBIT_API_SECRET`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` entries are placeholders only and are **not used** by this script. Do not put real credentials in this public repository. Historical public candle retrieval does not require them.
+
+## Results and limitations
+
+Reports are estimates, not forecasts or financial advice. The simplified model does not fully model funding payments, spread variation, order-book liquidity, contract-specific quantity rules, exchange outages, liquidation, or real fill uncertainty. Results can be misleading if candles are missing or symbols are delisted. Inspect warnings and the JSON configuration before interpreting results. No backtest is evidence of future profitability.
+
+EMA-BAND is a separate project and must remain untouched.
