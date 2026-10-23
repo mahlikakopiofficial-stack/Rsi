@@ -1,8 +1,12 @@
 import os
+import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from backtest import rsi_series, validate_strategy_config
+from paper_bot import init_db, process_symbol, validate_paper_config
 
 
 class RsiSeriesTests(unittest.TestCase):
@@ -51,6 +55,48 @@ class StrategyConfigTests(unittest.TestCase):
         with patch.dict(os.environ, {"RESEARCH_NOTIONAL_USD": "0"}, clear=True):
             with self.assertRaisesRegex(ValueError, "RESEARCH_NOTIONAL_USD"):
                 validate_strategy_config()
+
+
+class PaperBotTests(unittest.TestCase):
+    def test_paper_config_defaults_are_valid(self):
+        with patch.dict(os.environ, {}, clear=True):
+            validate_paper_config()
+
+    def test_live_mode_is_rejected(self):
+        with patch.dict(os.environ, {"APP_MODE": "live"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "only supports APP_MODE=paper"):
+                validate_paper_config()
+
+    def test_below_minimum_paper_notional_is_rejected(self):
+        with patch.dict(os.environ, {"PAPER_NOTIONAL_USD": "4.99"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "at least 5"):
+                validate_paper_config()
+
+    def test_first_poll_only_initializes_cursor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = init_db(Path(tmp) / "paper.sqlite3")
+            candles = [{"timestamp": 600000, "open": 100.0}]
+            with patch("paper_bot.get_signal", return_value=("enter_long", 35.0, 300000)):
+                notice = process_symbol(db, "BTCUSDT", candles)
+            self.assertIn("initialized", notice)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM positions").fetchone()[0], 0)
+            db.close()
+
+    def test_fresh_entry_is_persisted_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = init_db(Path(tmp) / "paper.sqlite3")
+            db.execute("INSERT INTO cursor VALUES (?,?)", ("BTCUSDT", 300000))
+            db.commit()
+            candles = [{"timestamp": 600000, "open": 100.0}]
+            with patch("paper_bot.get_signal", return_value=("enter_long", 35.0, 600000)):
+                # Timestamp advance is checked against the persisted signal cursor.
+                db.execute("UPDATE cursor SET last_signal_candle_ms=? WHERE symbol=?", (300000, "BTCUSDT"))
+                db.commit()
+                with patch("paper_bot.get_signal", return_value=("enter_long", 35.0, 600000)):
+                    notice = process_symbol(db, "BTCUSDT", candles)
+            self.assertIn("PAPER ENTRY", notice)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM positions").fetchone()[0], 1)
+            db.close()
 
 
 if __name__ == "__main__":
