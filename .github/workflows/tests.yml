@@ -1,4 +1,4 @@
-name: RSI research checks
+name: RSI research and paper checks
 
 on:
   push:
@@ -14,6 +14,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile Python files
-        run: python -m py_compile backtest.py test_backtest.py
+        run: python -m py_compile backtest.py paper_bot.py test_backtest.py
       - name: Run unit tests
         run: python -m unittest -v test_backtest.py
