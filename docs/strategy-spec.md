@@ -1,41 +1,34 @@
-# RSI(20) 5-Minute Historical Research Specification
+# RSI(20) 5-Minute Strategy and Execution Boundary
 
 ## Signal definitions
 
-Use RSI(20) on completed 5-minute candles by default; all values are configurable in `.env`.
+Use RSI(20) on completed 5-minute candles by default; settings are configurable in the server's untracked `.env`.
 
-- Long entry event: RSI crosses from at/above the configured threshold (default 40) to below it.
-- Long exit event: RSI crosses from at/below the configured threshold (default 70) to above it.
-- Short entry event: RSI crosses from at/below the configured threshold (default 85) to above it.
-- Short exit event: RSI crosses from at/above the configured threshold (default 30) to below it.
+- Long entry: RSI crosses from at/above 40 to below 40.
+- Long exit: RSI crosses from at/below 70 to above 70.
+- Short entry: RSI crosses from at/below 85 to above 85.
+- Short exit: RSI crosses from at/above 30 to below 30.
 
-A signal is observed after candle i closes; the simulated fill is at candle i+1 open. The study tracks at most one hypothetical position per symbol. Opposite entry signals are ignored while a position is open. Unclosed positions at the end of the data window are excluded from completed-trade statistics.
+The paper loop evaluates the most recently closed candle and simulates the fill at the next candle's open. On first start it establishes a cursor without taking a historical signal. When the signal cursor skips more than one interval, the loop advances without replaying stale signals. A single position per symbol is supported, with a global open-position cap.
 
-## Public data source
+## Bybit route
 
-The backtest uses Bybit V5 public market data only: `https://api.bybit.com/v5/market/kline`. No API key, private endpoint, or order submission is used. Market category, API base URL, timeframe, symbol list, time window, request timeout, and page limit are configurable in `.env.example`.
+The paper bot requests `GET /v5/market/kline` from the configured public Bybit base URL with category `linear`, symbol, and interval `5`. It uses no API key, private endpoint, account state, or order-placement endpoint. Returned candles are sorted and deduplicated, OHLC/volume are validated, and the latest candle must be current and contiguous with the preceding candle before a paper fill is simulated.
 
-## Assumptions
+## Telegram route
 
-- Simulated fill at the next candle open, not at the signal close.
-- Configurable assumed notional per hypothetical trade, not a recommended position size.
-- Configurable fee and slippage assumptions applied to each side's simulated fill.
-- One position per symbol, no pyramiding.
-- Results exclude an open position at the end of the window.
+If both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured in the server's untracked `.env`, the paper bot calls Telegram Bot API `sendMessage` for startup, simulated entries/exits, skipped stale signals, and errors. Telegram failure is logged and does not turn a notification into a trade. The bot does not expose Telegram commands or allow remote execution control.
 
-## Data-quality checklist
+## Paper accounting
 
-- Confirm the correct market category and symbol.
-- Sort candles by timestamp and deduplicate.
-- Identify missing intervals and incomplete candles.
-- Verify OHLC values and nonnegative volume.
-- Avoid look-ahead bias: an entry cannot use data unavailable at decision time.
-- Review the saved JSON configuration and any missing-candle warnings.
+- `PAPER_NOTIONAL_USD` is the simulated notional per position and must be at least $5.
+- `PAPER_MAX_OPEN_POSITIONS` caps the total number of simultaneous simulated positions.
+- Configured fee and slippage rates adjust simulated entry and exit prices.
+- Positions, signal cursors, and completed paper trades are persisted to a separate SQLite database.
+- Historical backtest notional and output reports are separate from paper trading state.
 
-## Important limitations
+## Safety and limitations
 
-This simple historical model does not fully model funding, dynamic spreads, order-book liquidity, exchange outages, delistings, contract quantity rules, liquidation, or real-world fill uncertainty. A missing-data warning can materially affect results. Historical results are not forecasts or financial advice and cannot establish future profitability.
+`paper_bot.py` rejects every mode other than `APP_MODE=paper`. Live execution is not implemented; private Bybit credentials in the example template are intentionally unused. Paper fills do not model order-book depth, funding, liquidation, contract quantity increments, exchange-side position reconciliation, or real fill certainty. Historical/paper results do not predict future performance.
 
-## Project boundary
-
-Historical analysis only. No live order execution, private API access, or credential use is implemented. EMA-BAND must remain untouched.
+EMA-BAND is a separate project and must remain untouched.
