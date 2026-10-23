@@ -1,6 +1,6 @@
 # RSI Historical Research
 
-A separate historical-research project for RSI(20) signals on completed 15-minute Bybit linear candles. This repository is independent of EMA-BAND.
+A separate historical-research project for RSI(20) signals on completed 5-minute Bybit linear candles. This repository is independent of EMA-BAND.
 
 ## What is implemented
 
