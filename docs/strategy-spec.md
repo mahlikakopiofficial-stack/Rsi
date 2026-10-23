@@ -1,8 +1,8 @@
-# RSI(20) Historical Research Specification
+# RSI(20) 5-Minute Historical Research Specification
 
 ## Signal definitions
 
-Use RSI(20) on completed 15-minute candles by default; all values are configurable in `.env`.
+Use RSI(20) on completed 5-minute candles by default; all values are configurable in `.env`.
 
 - Long entry event: RSI crosses from at/above the configured threshold (default 40) to below it.
 - Long exit event: RSI crosses from at/below the configured threshold (default 70) to above it.
