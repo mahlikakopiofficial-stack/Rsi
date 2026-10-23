@@ -64,7 +64,7 @@ def utc_ms(dt: datetime) -> int:
 def fetch_klines(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
     base = cfg("BYBIT_PUBLIC_BASE_URL", "https://api.bybit.com").rstrip("/")
     category = cfg("BYBIT_CATEGORY", "linear")
-    interval = str(integer("TIMEFRAME_MINUTES", 15))
+    interval = str(integer("TIMEFRAME_MINUTES", 5))
     limit = min(1000, max(1, integer("BYBIT_PAGE_LIMIT", 1000)))
     timeout = max(5, integer("HTTP_TIMEOUT_SECONDS", 20))
     pause = max(0.0, number("REQUEST_PAUSE_SECONDS", 0.15))
@@ -120,7 +120,7 @@ def fetch_klines(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
 
     candles = [rows[k] for k in sorted(rows)]
     # Only retain fully closed candles. The timestamp is candle open time.
-    interval_ms = integer("TIMEFRAME_MINUTES", 15) * 60_000
+    interval_ms = integer("TIMEFRAME_MINUTES", 5) * 60_000
     now_ms = utc_ms(datetime.now(timezone.utc))
     candles = [c for c in candles if c["timestamp"] + interval_ms <= now_ms]
     validate_candles(symbol, candles, interval_ms)
@@ -325,7 +325,7 @@ def main() -> int:
     summary_path.write_text(json.dumps({
         "disclaimer": "Historical estimates only; not financial advice or a prediction. No orders were placed.",
         "configuration": {
-            "timeframe_minutes": integer("TIMEFRAME_MINUTES", 15),
+            "timeframe_minutes": integer("TIMEFRAME_MINUTES", 5),
             "rsi_period": integer("RSI_PERIOD", 20),
             "fee_rate_per_side": number("FEE_RATE_PER_SIDE", 0.00055),
             "slippage_rate_per_side": number("SLIPPAGE_RATE_PER_SIDE", 0.0005),
