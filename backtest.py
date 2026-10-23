@@ -281,7 +281,33 @@ def backtest_symbol(symbol: str, candles: list[dict]) -> tuple[list[dict], dict]
     return trades, summary
 
 
+def validate_strategy_config() -> None:
+    """Fail fast on invalid strategy/risk assumptions before requesting data."""
+    timeframe = integer("TIMEFRAME_MINUTES", 5)
+    if timeframe not in {1, 3, 5, 15, 30, 60, 120, 240, 360, 720}:
+        raise ValueError("TIMEFRAME_MINUTES must be a supported Bybit minute interval: 1,3,5,15,30,60,120,240,360,720")
+    period = integer("RSI_PERIOD", 20)
+    if period < 2:
+        raise ValueError("RSI_PERIOD must be at least 2")
+    thresholds = {
+        "LONG_ENTRY_CROSS_BELOW": number("LONG_ENTRY_CROSS_BELOW", 40),
+        "LONG_EXIT_CROSS_ABOVE": number("LONG_EXIT_CROSS_ABOVE", 70),
+        "SHORT_ENTRY_CROSS_ABOVE": number("SHORT_ENTRY_CROSS_ABOVE", 85),
+        "SHORT_EXIT_CROSS_BELOW": number("SHORT_EXIT_CROSS_BELOW", 30),
+    }
+    for name, value in thresholds.items():
+        if not 0 <= value <= 100:
+            raise ValueError(f"{name} must be between 0 and 100")
+    if number("RESEARCH_NOTIONAL_USD", 1000) <= 0:
+        raise ValueError("RESEARCH_NOTIONAL_USD must be greater than 0")
+    if number("FEE_RATE_PER_SIDE", 0.00055) < 0:
+        raise ValueError("FEE_RATE_PER_SIDE cannot be negative")
+    if number("SLIPPAGE_RATE_PER_SIDE", 0.0005) < 0:
+        raise ValueError("SLIPPAGE_RATE_PER_SIDE cannot be negative")
+
+
 def main() -> int:
+    validate_strategy_config()
     symbols = [s.strip().upper() for s in cfg("SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT").split(",") if s.strip()]
     if not symbols:
         raise ValueError("SYMBOLS must contain at least one symbol")
